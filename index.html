@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Skener Alata</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f0f0; padding: 20px; text-align: center; }
+        .card { margin: 20px auto; max-width: 400px; border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); padding: 20px; background-color: #fff; }
+        .price { font-size: 20px; margin: 10px 0; }
+        .vele { color: green; font-weight: bold; }
+        .malo { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1 class="mb-4">QR Skener Alata</h1>
+    <div id="reader" style="width: 300px; margin: 0 auto;"></div>
+    <div id="result"></div>
+
+    <script>
+        function fetchData(qrCodeMessage) {
+            const apiUrl = 'https://script.google.com/macros/s/OVDJE-TVOM-LINK/exec?id=' + qrCodeMessage;
+
+            fetch(apiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('result').innerHTML = `<p style="color:red;">Alat nije pronađen.</p>`;
+                        return;
+                    }
+                    document.getElementById('result').innerHTML = `
+                        <div class="card">
+                            <h3>${data.naziv}</h3>
+                            <p><strong>Šifra:</strong> ${data.sifra}</p>
+                            <p class="price malo">Maloprodajna cijena: ${data.cijena} kn</p>
+                            <p class="price vele">Cijena s rabatom: ${data.cijenaRabatom} kn</p>
+                            <button class="btn btn-primary mt-3" onclick="restartScanner()">Skeniraj drugi alat</button>
+                        </div>
+                    `;
+                    document.getElementById('reader').style.display = 'none';
+                })
+                .catch(error => {
+                    document.getElementById('result').innerHTML = `<p style="color:red;">Greška u dohvaćanju podataka.</p>`;
+                });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            fetchData(decodedText);
+            html5QrcodeScanner.clear();
+        }
+
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", { fps: 10, qrbox: 250 });
+        html5QrcodeScanner.render(onScanSuccess);
+
+        function restartScanner() {
+            document.getElementById('reader').style.display = 'block';
+            document.getElementById('result').innerHTML = '';
+            html5QrcodeScanner.render(onScanSuccess);
+        }
+    </script>
+
+</body>
+</html>
