@@ -2,61 +2,63 @@
 <html lang="hr">
 <head>
   <meta charset="UTF-8" />
-  <title>QR Scanner za alate</title>
+  <title>QR Scanner Alati</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    body { font-family: Arial, sans-serif; margin: 20px; }
     #reader { width: 300px; margin-bottom: 20px; }
-    #result { border: 1px solid #ccc; padding: 15px; min-height: 100px; }
-    button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+    #result { border: 1px solid #ccc; padding: 10px; max-width: 600px; min-height: 120px; }
+    button { padding: 10px 15px; font-size: 16px; margin-right: 10px; cursor: pointer; }
+    img { max-width: 100px; margin-top: 10px; }
   </style>
 </head>
 <body>
   <h1>QR Scanner za alate</h1>
-  <div id="reader"></div>
+
   <button id="start-btn">Pokreni kameru</button>
   <button id="stop-btn" disabled>Zaustavi kameru</button>
-  <div id="result">Skeniraj QR kod da vidiš informacije o alatu.</div>
+
+  <div id="reader"></div>
+  <div id="result">Skeniraj QR kod da vidiš detalje alata.</div>
 
   <script>
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxX7ZaZOQeUKxOZL9pVLRpwWv21w8dRZlUayKLf2xWpM2y-MJiJSRmjFqg4k-igF_D9Fg/exec';
-
-    const startBtn = document.getElementById('start-btn');
-    const stopBtn = document.getElementById('stop-btn');
-    const resultDiv = document.getElementById('result');
-    const readerDiv = document.getElementById('reader');
-
+    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxISLSuUi8FuPQObh-Z7OeYGoMOXAO066xpt9MCC0vbiTl8OiGVdKtuQp4vbVu3PETJVA/exec';
+    let alatData = [];
     let html5QrCode;
 
-    function prikaziPoruku(msg, error = false) {
-      resultDiv.style.color = error ? 'red' : 'black';
-      resultDiv.innerHTML = msg;
+    // Učitaj podatke iz Google Sheets API-ja
+    function loadSheetData() {
+      return fetch(SHEET_URL)
+        .then(res => res.json())
+        .then(data => {
+          alatData = data;
+          console.log('Podaci učitani:', alatData.length);
+        })
+        .catch(err => {
+          console.error('Greška u dohvaćanju podataka:', err);
+          document.getElementById('result').innerText = 'Greška u dohvaćanju podataka.';
+        });
     }
 
-    function prikaziAlat(alat) {
-      resultDiv.style.color = 'black';
-      resultDiv.innerHTML = `
+    // Pronađi alat po ID-u i prikaži informacije
+    function prikaziAlat(id) {
+      const alat = alatData.find(a => a.id == id);
+      const rez = document.getElementById('result');
+      if (!alat) {
+        rez.innerHTML = `<p style="color:red;">Alat nije pronađen (ID: ${id})</p>`;
+        return;
+      }
+      rez.innerHTML = `
         <h2>${alat.naziv}</h2>
         <p><strong>Šifra:</strong> ${alat.sifra}</p>
         <p><strong>Cijena:</strong> ${alat.cijena} kn</p>
-        <p><strong>Cijena s rabatom:</strong> ${alat.cijenaRabatom} kn</p>
+        <p><strong>Cijena s rabatom:</strong> ${alat.cijena_rabat} kn</p>
+        ${alat.slika ? `<img src="${alat.slika}" alt="${alat.naziv}">` : ''}
+        <p>${alat.opis || ''}</p>
       `;
     }
 
-    function dohvatiAlat(id) {
-      prikaziPoruku('Dohvaćam podatke...');
-      fetch(`${API_URL}?id=${encodeURIComponent(id)}`)
-        .then(res => res.json())
-        .then(data => {
-          if(data.error) {
-            prikaziPoruku('Alat nije pronađen.', true);
-          } else {
-            prikaziAlat(data);
-          }
-        })
-        .catch(() => prikaziPoruku('Greška u dohvaćanju podataka.', true));
-    }
-
+    // Funkcije za start i stop kamere
     function startScanner() {
       if (!html5QrCode) {
         html5QrCode = new Html5Qrcode("reader");
@@ -65,41 +67,43 @@
         { facingMode: "environment" },
         { fps: 10, qrbox: 250 },
         qrCodeMessage => {
+          console.log(`Skeniran QR kod: ${qrCodeMessage}`);
+          prikaziAlat(qrCodeMessage.trim());
           html5QrCode.stop();
-          prikaziPoruku('QR kod skeniran: ' + qrCodeMessage);
-          dohvatiAlat(qrCodeMessage.trim());
           stopBtn.disabled = true;
           startBtn.disabled = false;
         },
         errorMessage => {
-          // možeš ovdje logirati greške skeniranja ako želiš
+          // opcionalno možeš logirati greške
         }
       ).then(() => {
-        prikaziPoruku('Kamera je pokrenuta, skeniraj QR kod...');
+        document.getElementById('result').innerText = 'Kamera je pokrenuta, skeniraj QR kod...';
         startBtn.disabled = true;
         stopBtn.disabled = false;
       }).catch(err => {
-        prikaziPoruku('Nemoguće pristupiti kameri: ' + err, true);
+        document.getElementById('result').innerText = 'Nema pristupa kameri: ' + err;
       });
     }
 
     function stopScanner() {
       if (html5QrCode) {
         html5QrCode.stop().then(() => {
-          prikaziPoruku('Kamera je zaustavljena.');
+          document.getElementById('result').innerText = 'Kamera je zaustavljena.';
           startBtn.disabled = false;
           stopBtn.disabled = true;
         }).catch(err => {
-          prikaziPoruku('Greška pri zaustavljanju kamere: ' + err, true);
+          document.getElementById('result').innerText = 'Greška pri zaustavljanju kamere: ' + err;
         });
       }
     }
 
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
     startBtn.addEventListener('click', startScanner);
     stopBtn.addEventListener('click', stopScanner);
 
-    // Po želji možeš automatski pokrenuti kameru na učitavanju stranice:
-    // startScanner();
+    // Prvo učitaj podatke, ali ne pokreći kameru odmah (čekaj klik na start)
+    loadSheetData();
   </script>
 </body>
 </html>
