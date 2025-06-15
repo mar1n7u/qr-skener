@@ -8,26 +8,34 @@
     body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
     #reader { width: 300px; margin-bottom: 20px; }
     #result { border: 1px solid #ccc; padding: 15px; min-height: 100px; }
+    button { padding: 10px 20px; margin: 5px; font-size: 16px; }
   </style>
 </head>
 <body>
   <h1>QR Scanner za alate</h1>
   <div id="reader"></div>
+  <button id="start-btn">Pokreni kameru</button>
+  <button id="stop-btn" disabled>Zaustavi kameru</button>
   <div id="result">Skeniraj QR kod da vidiš informacije o alatu.</div>
 
   <script>
     const API_URL = 'https://script.google.com/macros/s/AKfycbxX7ZaZOQeUKxOZL9pVLRpwWv21w8dRZlUayKLf2xWpM2y-MJiJSRmjFqg4k-igF_D9Fg/exec';
 
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const resultDiv = document.getElementById('result');
+    const readerDiv = document.getElementById('reader');
+
+    let html5QrCode;
+
     function prikaziPoruku(msg, error = false) {
-      const rez = document.getElementById('result');
-      rez.style.color = error ? 'red' : 'black';
-      rez.innerHTML = msg;
+      resultDiv.style.color = error ? 'red' : 'black';
+      resultDiv.innerHTML = msg;
     }
 
     function prikaziAlat(alat) {
-      const rez = document.getElementById('result');
-      rez.style.color = 'black';
-      rez.innerHTML = `
+      resultDiv.style.color = 'black';
+      resultDiv.innerHTML = `
         <h2>${alat.naziv}</h2>
         <p><strong>Šifra:</strong> ${alat.sifra}</p>
         <p><strong>Cijena:</strong> ${alat.cijena} kn</p>
@@ -50,23 +58,48 @@
     }
 
     function startScanner() {
-      const html5QrCode = new Html5Qrcode("reader");
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+      }
       html5QrCode.start(
         { facingMode: "environment" },
         { fps: 10, qrbox: 250 },
         qrCodeMessage => {
           html5QrCode.stop();
+          prikaziPoruku('QR kod skeniran: ' + qrCodeMessage);
           dohvatiAlat(qrCodeMessage.trim());
+          stopBtn.disabled = true;
+          startBtn.disabled = false;
         },
         errorMessage => {
           // možeš ovdje logirati greške skeniranja ako želiš
         }
-      ).catch(err => {
-        prikaziPoruku('Nemoguće pristupiti kameri.', true);
+      ).then(() => {
+        prikaziPoruku('Kamera je pokrenuta, skeniraj QR kod...');
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+      }).catch(err => {
+        prikaziPoruku('Nemoguće pristupiti kameri: ' + err, true);
       });
     }
 
-    startScanner();
+    function stopScanner() {
+      if (html5QrCode) {
+        html5QrCode.stop().then(() => {
+          prikaziPoruku('Kamera je zaustavljena.');
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        }).catch(err => {
+          prikaziPoruku('Greška pri zaustavljanju kamere: ' + err, true);
+        });
+      }
+    }
+
+    startBtn.addEventListener('click', startScanner);
+    stopBtn.addEventListener('click', stopScanner);
+
+    // Po želji možeš automatski pokrenuti kameru na učitavanju stranice:
+    // startScanner();
   </script>
 </body>
 </html>
