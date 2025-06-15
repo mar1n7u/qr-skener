@@ -2,95 +2,84 @@
 <html lang="hr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>QR Skener Alata s Google Sheets</title>
+  <title>QR Scanner Alati</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      text-align: center;
-    }
-    video {
-      width: 300px;
-      margin-bottom: 20px;
-      border: 2px solid #333;
-    }
-    #result {
-      margin-top: 20px;
-      padding: 15px;
-      border: 1px solid #333;
-      border-radius: 8px;
-      display: inline-block;
-      max-width: 400px;
-      word-wrap: break-word;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #reader { width: 300px; margin-bottom: 20px; }
+    #result { border: 1px solid #ccc; padding: 10px; max-width: 600px; }
+    img { max-width: 100px; margin-top: 10px; }
   </style>
 </head>
 <body>
+  <h1>QR Scanner za alate</h1>
 
-  <h1>QR Skener Alata (Google Sheets)</h1>
-  <video id="preview"></video>
-  <div id="result">Skeniraj QR kod...</div>
+  <div id="reader"></div>
+  <div id="result">Skeniraj QR kod da vidiš detalje alata.</div>
 
-  <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
   <script>
-    const SHEET_ID = '<SHEET_ID>'; // Ovdje stavi ID svoje Google Sheets tablice
-    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwrrTfO8bWJeu7llR6we0dmQVfkh-8lUKM7WXd9GZGHZ95lUqvZl8tWZQkq2_Rk4Zo6Eg/exec';
-
+    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxISLSuUi8FuPQObh-Z7OeYGoMOXAO066xpt9MCC0vbiTl8OiGVdKtuQp4vbVu3PETJVA/exec';
     let alatData = [];
 
-    // Učitaj podatke iz Google Sheets
+    // Učitaj podatke iz Google Sheets API-ja
     function loadSheetData() {
       return fetch(SHEET_URL)
-        .then(response => response.text())
-        .then(dataText => {
-          // Parsiraj JSONP format
-          const json = JSON.parse(dataText.substr(47).slice(0, -2));
-          const rows = json.table.rows;
-
-          alatData = rows.map(row => ({
-            id: row.c[0]?.v || '',
-            naziv: row.c[1]?.v || '',
-            sifra: row.c[2]?.v || '',
-            cijena: row.c[3]?.v || '',
-            cijena_rabat: row.c[4]?.v || ''
-          }));
+        .then(res => res.json())
+        .then(data => {
+          alatData = data;
+          console.log('Podaci učitani:', alatData.length);
         })
         .catch(err => {
-          console.error('Greška pri dohvaćanju Google Sheets podataka:', err);
+          console.error('Greška u dohvaćanju podataka:', err);
           document.getElementById('result').innerText = 'Greška u dohvaćanju podataka.';
         });
     }
 
-    // Inicijaliziraj skener nakon što su podaci učitani
-    loadSheetData().then(() => {
-      let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
-      scanner.addListener('scan', function(content) {
-        let alat = alatData.find(item => item.id === content.trim());
-        if (alat) {
-          document.getElementById('result').innerHTML = `
-            <h2>${alat.naziv}</h2>
-            <p>Šifra: ${alat.sifra}</p>
-            <p>Cijena: ${alat.cijena} kn</p>
-            <p>Cijena s rabatom: ${alat.cijena_rabat} kn</p>
-          `;
-        } else {
-          document.getElementById('result').innerText = 'Alat nije pronađen!';
-        }
-      });
+    // Pronađi alat po ID-u i prikaži informacije
+    function prikaziAlat(id) {
+      const alat = alatData.find(a => a.id == id);
+      const rez = document.getElementById('result');
+      if (!alat) {
+        rez.innerHTML = `<p style="color:red;">Alat nije pronađen (ID: ${id})</p>`;
+        return;
+      }
+      rez.innerHTML = `
+        <h2>${alat.naziv}</h2>
+        <p><strong>Šifra:</strong> ${alat.sifra}</p>
+        <p><strong>Cijena:</strong> ${alat.cijena} kn</p>
+        <p><strong>Cijena s rabatom:</strong> ${alat.cijena_rabat} kn</p>
+        ${alat.slika ? `<img src="${alat.slika}" alt="${alat.naziv}">` : ''}
+        <p>${alat.opis || ''}</p>
+      `;
+    }
 
-      Instascan.Camera.getCameras().then(function(cameras) {
-        if (cameras.length > 0) {
-          scanner.start(cameras[0]);
-        } else {
-          alert('Nema pronađene kamere.');
+    // Inicijaliziraj QR skener
+    function initScanner() {
+      const html5QrCode = new Html5Qrcode("reader");
+      const qrConfig = { fps: 10, qrbox: 250 };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        qrConfig,
+        qrCodeMessage => {
+          console.log(`Skeniran QR kod: ${qrCodeMessage}`);
+          prikaziAlat(qrCodeMessage.trim());
+          html5QrCode.stop(); // zaustavi skeniranje nakon prvog čitanja
+        },
+        errorMessage => {
+          // možeš ispisivati greške skeniranja ako želiš
+          // console.warn(`QR scan error: ${errorMessage}`);
         }
-      }).catch(function(e) {
-        console.error(e);
-        alert('Greška u pokretanju kamere.');
+      ).catch(err => {
+        console.error('Ne mogu pokrenuti skener:', err);
+        document.getElementById('result').innerText = 'Nema pristupa kameri.';
       });
+    }
+
+    // Glavni tok
+    loadSheetData().then(() => {
+      initScanner();
     });
   </script>
-
 </body>
 </html>
