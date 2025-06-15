@@ -1,78 +1,96 @@
 <!DOCTYPE html>
 <html lang="hr">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>QR Skener Alata</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            text-align: center;
-        }
-        video {
-            width: 300px;
-            margin-bottom: 20px;
-            border: 2px solid #333;
-        }
-        #result {
-            margin-top: 20px;
-            padding: 15px;
-            border: 1px solid #333;
-            border-radius: 8px;
-            display: inline-block;
-            max-width: 400px;
-            word-wrap: break-word;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QR Skener Alata s Google Sheets</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      text-align: center;
+    }
+    video {
+      width: 300px;
+      margin-bottom: 20px;
+      border: 2px solid #333;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      display: inline-block;
+      max-width: 400px;
+      word-wrap: break-word;
+    }
+  </style>
 </head>
 <body>
 
-    <h1>QR Skener Alata</h1>
-    <video id="preview"></video>
-    <div id="result">Skeniraj QR kod...</div>
+  <h1>QR Skener Alata (Google Sheets)</h1>
+  <video id="preview"></video>
+  <div id="result">Skeniraj QR kod...</div>
 
-    <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
-    <script>
-        let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
-        scanner.addListener('scan', function (content) {
-            fetch('alati.json')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Greška u dohvaćanju baze podataka');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    let alat = data.find(item => item.id === content.trim());
-                    if (alat) {
-                        document.getElementById('result').innerHTML = `
-                            <h2>${alat.naziv}</h2>
-                            <p>Šifra: ${alat.sifra}</p>
-                            <p>Cijena: ${alat.cijena} kn</p>
-                            <p>Cijena s rabatom: ${alat.cijena_rabat} kn</p>
-                        `;
-                    } else {
-                        document.getElementById('result').innerText = 'Alat nije pronađen!';
-                    }
-                })
-                .catch(error => {
-                    document.getElementById('result').innerText = 'Greška u dohvaćanju podataka.';
-                    console.error(error);
-                });
-        });
+  <script src="https://rawgit.com/schmich/instascan-builds/master/instascan.min.js"></script>
+  <script>
+    const SHEET_ID = '<SHEET_ID>'; // Ovdje stavi ID svoje Google Sheets tablice
+    const SHEET_URL = 'https://script.google.com/macros/s/AKfycbwrrTfO8bWJeu7llR6we0dmQVfkh-8lUKM7WXd9GZGHZ95lUqvZl8tWZQkq2_Rk4Zo6Eg/exec';
 
-        Instascan.Camera.getCameras().then(function (cameras) {
-            if (cameras.length > 0) {
-                scanner.start(cameras[0]);
-            } else {
-                alert('Nema pronađene kamere.');
-            }
-        }).catch(function (e) {
-            console.error(e);
-            alert('Greška u pokretanju kamere.');
+    let alatData = [];
+
+    // Učitaj podatke iz Google Sheets
+    function loadSheetData() {
+      return fetch(SHEET_URL)
+        .then(response => response.text())
+        .then(dataText => {
+          // Parsiraj JSONP format
+          const json = JSON.parse(dataText.substr(47).slice(0, -2));
+          const rows = json.table.rows;
+
+          alatData = rows.map(row => ({
+            id: row.c[0]?.v || '',
+            naziv: row.c[1]?.v || '',
+            sifra: row.c[2]?.v || '',
+            cijena: row.c[3]?.v || '',
+            cijena_rabat: row.c[4]?.v || ''
+          }));
+        })
+        .catch(err => {
+          console.error('Greška pri dohvaćanju Google Sheets podataka:', err);
+          document.getElementById('result').innerText = 'Greška u dohvaćanju podataka.';
         });
-    </script>
+    }
+
+    // Inicijaliziraj skener nakon što su podaci učitani
+    loadSheetData().then(() => {
+      let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
+      scanner.addListener('scan', function(content) {
+        let alat = alatData.find(item => item.id === content.trim());
+        if (alat) {
+          document.getElementById('result').innerHTML = `
+            <h2>${alat.naziv}</h2>
+            <p>Šifra: ${alat.sifra}</p>
+            <p>Cijena: ${alat.cijena} kn</p>
+            <p>Cijena s rabatom: ${alat.cijena_rabat} kn</p>
+          `;
+        } else {
+          document.getElementById('result').innerText = 'Alat nije pronađen!';
+        }
+      });
+
+      Instascan.Camera.getCameras().then(function(cameras) {
+        if (cameras.length > 0) {
+          scanner.start(cameras[0]);
+        } else {
+          alert('Nema pronađene kamere.');
+        }
+      }).catch(function(e) {
+        console.error(e);
+        alert('Greška u pokretanju kamere.');
+      });
+    });
+  </script>
 
 </body>
 </html>
