@@ -1,98 +1,24 @@
-<!DOCTYPE html>
 <html lang="hr">
-
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>QR Scanner za alate</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 10px;
-            padding: 10px;
-            max-width: 100%;
-            background-color: #fefefe;
-            color: #222;
-        }
-
-        h1 {
-            color: #ffc107;
-            text-align: center;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-
-        #reader {
-            width: 100%;
-            max-width: 350px;
-            margin: 0 auto 20px auto;
-            border: 2px solid #ffc107;
-            border-radius: 10px;
-            padding: 10px;
-            background-color: #000;
-        }
-
-        #result {
-            border: 2px solid #000;
-            padding: 15px;
-            min-height: 120px;
-            background-color: #fff8e1;
-            color: #000;
-            border-radius: 10px;
-            margin-top: 20px;
-            font-size: 16px;
-        }
-
-        button {
-            padding: 12px 20px;
-            margin: 10px 5px;
-            font-size: 18px;
-            cursor: pointer;
-            border: none;
-            border-radius: 8px;
-            color: #fff;
-            background-color: #000;
-            transition: background-color 0.3s ease;
-            width: 45%;
-        }
-
-        button:hover {
-            background-color: #ffc107;
-            color: #000;
-        }
-
-        img {
-            max-width: 100%;
-            height: auto;
-            margin-top: 10px;
-            border: 2px solid #ffc107;
-            border-radius: 5px;
-        }
-
-        @media (max-width: 480px) {
-            h1 {
-                font-size: 20px;
-            }
-
-            button {
-                width: 100%;
-                margin: 5px 0;
-            }
-        }
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; background-color: #000; color: #FFD700; }
+        #reader { width: 300px; margin-bottom: 20px; }
+        #result { border: 1px solid #FFD700; padding: 15px; min-height: 100px; background-color: #222; color: #FFD700; }
+        button { padding: 10px 20px; margin: 5px; font-size: 16px; background-color: #FFD700; color: black; border: none; border-radius: 5px; cursor: pointer; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        img { max-width: 100px; margin-top: 10px; }
     </style>
 </head>
-
 <body>
 
     <h1>QR Scanner za alate</h1>
 
     <div id="reader"></div>
-
-    <div style="text-align: center;">
-        <button id="start-btn">Pokreni kameru</button>
-        <button id="stop-btn" disabled>Zaustavi kameru</button>
-    </div>
+    <button id="start-btn">Pokreni kameru</button>
+    <button id="stop-btn" disabled>Zaustavi kameru</button>
 
     <div id="result">Skeniraj QR kod da vidiš informacije o alatu.</div>
 
@@ -100,20 +26,33 @@
         const SHEET_URL = 'https://script.google.com/macros/s/AKfycbxzWcy-dvrYzG7dIwzUiFuhQmwKHOxyU6uQY7iWDzOcMvtqxl6fkBGjI6f1OdKhgUht6Q/exec';
         const API_URL = 'https://script.google.com/macros/s/AKfycbwFkrQHUV146wqGAc1_GYD_CbTNIAeNfd-zJuovUe4QFmX4Vt3VuIz4QQatwSEK7St94Q/exec';
         let alatData = [];
+        let html5QrCode;
 
         const startBtn = document.getElementById('start-btn');
         const stopBtn = document.getElementById('stop-btn');
         const resultDiv = document.getElementById('result');
 
-        let html5QrCode;
+        // Učitaj podatke
+        function loadSheetData() {
+            return fetch(SHEET_URL)
+                .then(res => res.json())
+                .then(data => {
+                    alatData = data;
+                    console.log('Podaci učitani:', alatData.length);
+                })
+                .catch(err => {
+                    console.error('Greška u dohvaćanju podataka:', err);
+                    prikaziPoruku('Greška u dohvaćanju podataka.', true);
+                });
+        }
 
         function prikaziPoruku(msg, error = false) {
-            resultDiv.style.color = error ? 'red' : 'black';
+            resultDiv.style.color = error ? 'red' : '#FFD700';
             resultDiv.innerHTML = msg;
         }
 
         function prikaziAlat(alat) {
-            resultDiv.style.color = 'black';
+            resultDiv.style.color = '#FFD700';
             resultDiv.innerHTML = `
                 <h2>${alat.naziv}</h2>
                 <p><strong>Šifra:</strong> ${alat.sifra}</p>
@@ -139,6 +78,7 @@
         }
 
         function startScanner() {
+            console.log('Pokrećem kameru...');
             if (!html5QrCode) {
                 html5QrCode = new Html5Qrcode("reader");
             }
@@ -148,14 +88,14 @@
                 { fps: 10, qrbox: 250 },
                 qrCodeMessage => {
                     console.log(`Skeniran QR kod: ${qrCodeMessage}`);
-                    html5QrCode.stop();
-                    prikaziPoruku('QR kod skeniran: ' + qrCodeMessage);
                     dohvatiAlat(qrCodeMessage.trim());
+                    html5QrCode.stop(); // automatski zaustavi kameru nakon skeniranja
                     stopBtn.disabled = true;
                     startBtn.disabled = false;
+                    prikaziPoruku('QR kod skeniran: ' + qrCodeMessage);
                 },
                 errorMessage => {
-                    // Možeš ovdje logirati greške skeniranja ako želiš
+                    // greške u skeniranju ne moramo prikazivati, ali možeš logirati
                 }
             ).then(() => {
                 prikaziPoruku('Kamera je pokrenuta, skeniraj QR kod...');
@@ -180,8 +120,9 @@
 
         startBtn.addEventListener('click', startScanner);
         stopBtn.addEventListener('click', stopScanner);
+
+        loadSheetData();
     </script>
 
 </body>
-
 </html>
