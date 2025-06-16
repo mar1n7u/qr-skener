@@ -2,20 +2,169 @@
 <html lang="hr">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>QR Scanner za alate</title>
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode/minified/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto; }
-    #reader { width: 300px; margin-bottom: 20px; }
-    #result { border: 1px solid #ccc; padding: 15px; min-height: 100px; }
-    button { padding: 10px 20px; margin: 5px; font-size: 16px; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      margin: 0;
+      text-align: center;
+      background-color: #000;
+      color: #FFD700;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 20px;
+      color: #FFD700;
+      text-shadow: 1px 1px 3px #333;
+    }
+    #reader-container {
+      display: inline-block;
+      padding: 10px;
+      border: 4px dashed #FFD700;
+      border-radius: 12px;
+      background-color: #111;
+      box-shadow: 0 0 15px #FFD700;
+      margin-bottom: 20px;
+      transition: transform 0.3s ease;
+    }
+    #reader-container.active {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px #FFD700, 0 0 10px #FFD700 inset;
+    }
+    #reader {
+      width: 100%;
+      max-width: 300px;
+    }
+    button {
+      padding: 15px 30px;
+      margin: 10px;
+      font-size: 18px;
+      border: none;
+      border-radius: 10px;
+      background-color: #FFD700;
+      color: #000;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.2s, background-color 0.2s;
+    }
+    button:hover:not(:disabled) {
+      background-color: #e6c200;
+      transform: scale(1.05);
+    }
+    button:disabled {
+      background-color: #555;
+      color: #ccc;
+      cursor: not-allowed;
+    }
+    #result {
+      border: 2px solid #FFD700;
+      border-radius: 10px;
+      padding: 15px;
+      min-height: 150px;
+      background-color: #111;
+      font-size: 18px;
+      margin-top: 20px;
+      color: white;
+      opacity: 0;
+      transform: scale(0.95);
+      transition: all 0.5s ease;
+    }
+    #result.show {
+      opacity: 1;
+      transform: scale(1);
+    }
+    #result img {
+      max-width: 100%;
+      margin-top: 15px;
+      border: 2px solid #FFD700;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #FFD700;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    a {
+      color: #FFD700;
+      font-weight: bold;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    #cart {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #FFD700;
+      color: #000;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    #cart:hover {
+      transform: scale(1.1);
+    }
+    #cart-modal {
+      position: fixed;
+      top: 80px;
+      right: 20px;
+      background-color: #111;
+      border: 2px solid #FFD700;
+      border-radius: 10px;
+      padding: 15px;
+      max-width: 300px;
+      max-height: 400px;
+      overflow-y: auto;
+      display: none;
+      text-align: left;
+      color: white;
+    }
+    .cart-item {
+      border-bottom: 1px solid #FFD700;
+      padding: 10px 0;
+    }
+    .remove-btn {
+      background-color: red;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      float: right;
+    }
   </style>
 </head>
 <body>
+
   <h1>QR Scanner za alate</h1>
-  <div id="reader"></div>
+
+  <div id="cart">0</div>
+  <div id="cart-modal"></div>
+
+  <div id="reader-container">
+    <div id="reader"></div>
+  </div>
+
   <button id="start-btn">Pokreni kameru</button>
   <button id="stop-btn" disabled>Zaustavi kameru</button>
+
   <div id="result">Skeniraj QR kod da vidiš informacije o alatu.</div>
 
   <script>
@@ -25,30 +174,48 @@
     const stopBtn = document.getElementById('stop-btn');
     const resultDiv = document.getElementById('result');
     const readerDiv = document.getElementById('reader');
+    const readerContainer = document.getElementById('reader-container');
+    const cartBtn = document.getElementById('cart');
+    const cartModal = document.getElementById('cart-modal');
 
     let html5QrCode;
+    let kosarica = [];
 
     function prikaziPoruku(msg, error = false) {
-      resultDiv.style.color = error ? 'red' : 'black';
+      resultDiv.style.color = error ? 'red' : 'white';
       resultDiv.innerHTML = msg;
+      resultDiv.classList.add('show');
+    }
+
+    function prikaziSpinner() {
+      resultDiv.innerHTML = '<div class="spinner"></div>';
+      resultDiv.classList.add('show');
     }
 
     function prikaziAlat(alat) {
-      resultDiv.style.color = 'black';
+      const slikaHtml = alat.slika && alat.slika.trim() !== ''
+        ? `<img src="${alat.slika}" alt="Slika alata" />`
+        : '<p>Slika nije dostupna.</p>';
+
+      resultDiv.style.color = 'white';
       resultDiv.innerHTML = `
-        <h2>${alat.naziv}</h2>
+        <h2>${alat.kratkiNaziv}</h2>
         <p><strong>Šifra:</strong> ${alat.sifra}</p>
-        <p><strong>Cijena:</strong> ${alat.cijena} EUR</p>
-        <p><strong>Cijena s rabatom:</strong> ${alat.cijenaRabatom} EUR</p>
+        <p><strong>Naziv:</strong> ${alat.naziv}</p>
+        <a href="${alat.link}" target="_blank">Pogledaj proizvod</a>
+        ${slikaHtml}
+        <br><br>
+        <button onclick='dodajUKosaricu(${JSON.stringify(alat)})'>Dodaj u košaricu</button>
       `;
+      resultDiv.classList.add('show');
     }
 
     function dohvatiAlat(id) {
-      prikaziPoruku('Dohvaćam podatke...');
+      prikaziSpinner();
       fetch(`${API_URL}?id=${encodeURIComponent(id)}`)
         .then(res => res.json())
         .then(data => {
-          if(data.error) {
+          if (data.error) {
             prikaziPoruku('Alat nije pronađen.', true);
           } else {
             prikaziAlat(data);
@@ -66,6 +233,7 @@
         { fps: 10, qrbox: 250 },
         qrCodeMessage => {
           html5QrCode.stop();
+          readerContainer.classList.remove('active');
           prikaziPoruku('QR kod skeniran: ' + qrCodeMessage);
           dohvatiAlat(qrCodeMessage.trim());
           stopBtn.disabled = true;
@@ -75,6 +243,7 @@
           // možeš ovdje logirati greške skeniranja ako želiš
         }
       ).then(() => {
+        readerContainer.classList.add('active');
         prikaziPoruku('Kamera je pokrenuta, skeniraj QR kod...');
         startBtn.disabled = true;
         stopBtn.disabled = false;
@@ -86,6 +255,7 @@
     function stopScanner() {
       if (html5QrCode) {
         html5QrCode.stop().then(() => {
+          readerContainer.classList.remove('active');
           prikaziPoruku('Kamera je zaustavljena.');
           startBtn.disabled = false;
           stopBtn.disabled = true;
@@ -94,6 +264,37 @@
         });
       }
     }
+
+    function dodajUKosaricu(alat) {
+      kosarica.push(alat);
+      azurirajKosaricu();
+    }
+
+    function azurirajKosaricu() {
+      cartBtn.textContent = kosarica.length;
+      let html = '<h3>Košarica</h3>';
+      kosarica.forEach((alat, index) => {
+        html += `
+          <div class="cart-item">
+            ${alat.kratkiNaziv}
+            <button class="remove-btn" onclick="ukloniIzKosarice(${index})">Ukloni</button>
+          </div>
+        `;
+      });
+      if (kosarica.length === 0) {
+        html += '<p>Košarica je prazna.</p>';
+      }
+      cartModal.innerHTML = html;
+    }
+
+    function ukloniIzKosarice(index) {
+      kosarica.splice(index, 1);
+      azurirajKosaricu();
+    }
+
+    cartBtn.addEventListener('click', () => {
+      cartModal.style.display = cartModal.style.display === 'block' ? 'none' : 'block';
+    });
 
     startBtn.addEventListener('click', startScanner);
     stopBtn.addEventListener('click', stopScanner);
